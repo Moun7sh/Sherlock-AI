@@ -1,0 +1,46 @@
+{
+  "name": "sherlock-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sherlock AI — Autonomous Investigation Operating System for Karnataka State Police",
+  "author": "Sherlock AI Team",
+  "license": "MIT",
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "predev": "npm run db:generate",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "npm -w client run dev",
+    "dev:server": "npm -w server run dev",
+    "prebuild": "npm run db:generate",
+    "build": "npm -w server run build && npm -w client run build",
+    "start": "npm -w server run start",
+    "db:migrate": "npm -w server run db:migrate",
+    "db:seed": "npm -w server run db:seed",
+    "db:reset": "npm -w server run db:reset",
+    "db:generate": "npm -w server run db:generate",
+    "setup": "npm install && npm run db:migrate && npm run db:seed",
+    "test": "npm -w server run test && npm -w client run test",
+    "lint": "npm -w client run lint && npm -w server run lint",
+    "typecheck": "npm -w client run typecheck && npm -w server run typecheck",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:build": "docker compose build",
+    "postinstall": "prisma generate --schema prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react-hooks": "^4.0.0",
+    "eslint-plugin-react-refresh": "^0.4.0",
+    "globals": "^15.8.0",
+    "vitest": "^4.1.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

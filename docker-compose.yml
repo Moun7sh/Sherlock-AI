@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sherlock
+      POSTGRES_PASSWORD: sherlock2026
+      POSTGRES_DB: sherlock_ai
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sherlock"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://sherlock:sherlock2026@db:5432/sherlock_ai?schema=public
+      PORT: "3001"
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+      CLIENT_URL: http://localhost:3001
+    ports:
+      - "3001:3001"
+
+  client:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.client
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+
+volumes:
+  pgdata:

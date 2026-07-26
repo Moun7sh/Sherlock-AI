@@ -1,0 +1,451 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Authentication & Users ──────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  SUPERINTENDENT
+  INSPECTOR
+  SUB_INSPECTOR
+  CONSTABLE
+  ANALYST
+}
+
+model User {
+  id            String   @id @default(cuid())
+  badgeNumber   String   @unique @map("badge_number")
+  name          String
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  role          Role     @default(CONSTABLE)
+  rank          String?
+  department    String?
+  station       String?
+  phone         String?
+  avatarUrl     String?  @map("avatar_url")
+  isActive      Boolean  @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+  assignments   CaseAssignment[]
+  auditLogs     AuditLog[]
+  notes         Note[]
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ─── Core Crime Data ────────────────────────────────────────────────────────
+
+enum CaseStatus {
+  OPEN
+  UNDER_INVESTIGATION
+  CHARGESHEET_FILED
+  CLOSED
+  REOPENED
+}
+
+enum ThreatLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EvidenceType {
+  DOCUMENT
+  IMAGE
+  VIDEO
+  AUDIO
+  PHYSICAL
+  DIGITAL
+  FORENSIC
+}
+
+model Case {
+  id              String     @id @default(cuid())
+  firNumber       String     @unique @map("fir_number")
+  title           String
+  description     String
+  crimeType       String     @map("crime_type")
+  ipcSections     String[]   @map("ipc_sections")
+  status          CaseStatus @default(OPEN)
+  priority        ThreatLevel @default(MEDIUM)
+  station         String
+  district        String
+  state           String     @default("Karnataka")
+  place           String
+  latitude        Float?
+  longitude       Float?
+  dateOfOffence   DateTime   @map("date_of_offence")
+  timeOfOffence   String?    @map("time_of_offence")
+  dateOfFiling    DateTime   @map("date_of_filing")
+  estimatedLoss   String?    @map("estimated_loss")
+  summary         String?
+  aiSummary       String?    @map("ai_summary")
+  aiSimilarity    Float?     @map("ai_similarity")
+  aiNetworkId     String?    @map("ai_network_id")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  suspects        CaseSuspect[]
+  vehicles        CaseVehicle[]
+  phones          CasePhone[]
+  evidence        Evidence[]
+  timelineEvents  TimelineEvent[]
+  assignments     CaseAssignment[]
+  notes           Note[]
+  bankAccounts    CaseBankAccount[]
+
+  @@index([crimeType])
+  @@index([district])
+  @@index([status])
+  @@index([dateOfOffence])
+  @@map("cases")
+}
+
+model Person {
+  id          String      @id @default(cuid())
+  name        String
+  alias       String?
+  age         Int?
+  gender      String?
+  aadhaar     String?     @unique
+  address     String?
+  phone       String?
+  photo       String?
+  threatLevel ThreatLevel @default(LOW) @map("threat_level")
+  priorCount  Int         @default(0) @map("prior_count")
+  fingerprint String?
+  description String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  caseLinks   CaseSuspect[]
+  phoneLinks  PersonPhone[]
+
+  @@index([name])
+  @@index([threatLevel])
+  @@map("persons")
+}
+
+model Vehicle {
+  id           String   @id @default(cuid())
+  registration String   @unique
+  make         String?
+  model        String?
+  color        String?
+  type         String?
+  ownerName    String?  @map("owner_name")
+  ownerAddress String?  @map("owner_address")
+  chassisNo    String?  @map("chassis_no")
+  engineNo     String?  @map("engine_no")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  caseLinks    CaseVehicle[]
+
+  @@index([registration])
+  @@map("vehicles")
+}
+
+model PhoneNumber {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  carrier   String?
+  imei      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  caseLinks   CasePhone[]
+  personLinks PersonPhone[]
+  cdrRecords  CDRRecord[]
+
+  @@map("phone_numbers")
+}
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  accountNumber String?  @map("account_number")
+  bankName      String   @map("bank_name")
+  branch        String?
+  ifsc          String?
+  holderName    String?  @map("holder_name")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  caseLinks     CaseBankAccount[]
+  transactions  BankTransaction[]
+
+  @@map("bank_accounts")
+}
+
+// ─── Junction Tables ────────────────────────────────────────────────────────
+
+enum SuspectRole {
+  ACCUSED
+  SUSPECT
+  WITNESS
+  VICTIM
+  INFORMANT
+  ACCOMPLICE
+}
+
+model CaseSuspect {
+  id       String      @id @default(cuid())
+  caseId   String      @map("case_id")
+  personId String      @map("person_id")
+  role     SuspectRole @default(SUSPECT)
+  notes    String?
+
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, personId])
+  @@map("case_suspects")
+}
+
+model CaseVehicle {
+  id        String  @id @default(cuid())
+  caseId    String  @map("case_id")
+  vehicleId String  @map("vehicle_id")
+  context   String?
+
+  case    Case    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, vehicleId])
+  @@map("case_vehicles")
+}
+
+model CasePhone {
+  id      String  @id @default(cuid())
+  caseId  String  @map("case_id")
+  phoneId String  @map("phone_id")
+  context String?
+
+  case  Case        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  phone PhoneNumber @relation(fields: [phoneId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, phoneId])
+  @@map("case_phones")
+}
+
+model CaseBankAccount {
+  id            String  @id @default(cuid())
+  caseId        String  @map("case_id")
+  bankAccountId String  @map("bank_account_id")
+  context       String?
+
+  case        Case        @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, bankAccountId])
+  @@map("case_bank_accounts")
+}
+
+model PersonPhone {
+  id       String @id @default(cuid())
+  personId String @map("person_id")
+  phoneId  String @map("phone_id")
+
+  person Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+  phone  PhoneNumber @relation(fields: [phoneId], references: [id], onDelete: Cascade)
+
+  @@unique([personId, phoneId])
+  @@map("person_phones")
+}
+
+// ─── Evidence & Investigation ───────────────────────────────────────────────
+
+model Evidence {
+  id           String       @id @default(cuid())
+  caseId       String       @map("case_id")
+  type         EvidenceType
+  title        String
+  description  String?
+  fileUrl      String?      @map("file_url")
+  fileName     String?      @map("file_name")
+  mimeType     String?      @map("mime_type")
+  fileSize     Int?         @map("file_size")
+  hash         String?
+  extractedText String?     @map("extracted_text")
+  aiEntities   Json?        @map("ai_entities")
+  chainOfCustody Json?      @map("chain_of_custody")
+  collectedAt  DateTime?    @map("collected_at")
+  collectedBy  String?      @map("collected_by")
+  location     String?
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("evidence")
+}
+
+model TimelineEvent {
+  id          String   @id @default(cuid())
+  caseId      String   @map("case_id")
+  timestamp   DateTime
+  title       String
+  description String?
+  eventType   String   @map("event_type")
+  location    String?
+  source      String?
+  confidence  Float?
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, timestamp])
+  @@map("timeline_events")
+}
+
+// ─── Intelligence ───────────────────────────────────────────────────────────
+
+model CDRRecord {
+  id          String   @id @default(cuid())
+  phoneId     String   @map("phone_id")
+  calledNumber String  @map("called_number")
+  duration    Int?
+  towerLocation String? @map("tower_location")
+  towerLat    Float?   @map("tower_lat")
+  towerLng    Float?   @map("tower_lng")
+  callTime    DateTime @map("call_time")
+  callType    String   @default("OUTGOING") @map("call_type")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  phone PhoneNumber @relation(fields: [phoneId], references: [id], onDelete: Cascade)
+
+  @@index([phoneId, callTime])
+  @@map("cdr_records")
+}
+
+model BankTransaction {
+  id            String   @id @default(cuid())
+  bankAccountId String   @map("bank_account_id")
+  amount        Float
+  type          String
+  location      String?
+  reference     String?
+  timestamp     DateTime
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  bankAccount BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@index([bankAccountId, timestamp])
+  @@map("bank_transactions")
+}
+
+model NetworkLink {
+  id         String  @id @default(cuid())
+  sourceType String  @map("source_type")
+  sourceId   String  @map("source_id")
+  targetType String  @map("target_type")
+  targetId   String  @map("target_id")
+  relation   String
+  weight     Float   @default(1.0)
+  isInferred Boolean @default(false) @map("is_inferred")
+  confidence Float?
+  evidence   String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([sourceId])
+  @@index([targetId])
+  @@map("network_links")
+}
+
+// ─── Operational ────────────────────────────────────────────────────────────
+
+model CaseAssignment {
+  id        String   @id @default(cuid())
+  caseId    String   @map("case_id")
+  userId    String   @map("user_id")
+  role      String   @default("Investigator")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, userId])
+  @@map("case_assignments")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  caseId    String   @map("case_id")
+  userId    String   @map("user_id")
+  content   String
+  isPrivate Boolean  @default(false) @map("is_private")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("notes")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false) @map("is_read")
+  link      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  details   Json?
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  group String @default("general")
+
+  @@map("settings")
+}
